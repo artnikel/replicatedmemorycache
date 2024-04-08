@@ -1,49 +1,24 @@
 package repository
 
-import (
-	"sync"
-	"time"
-
-	"github.com/artnikel/replicatedmemorycache/internal/model"
-)
-
-type InMemoryCacheRepository struct {
-	cache map[string]model.CacheItem
-	mu    sync.RWMutex
+type MapDataRepository struct {
+	dataMap map[string]string
 }
 
-func NewInMemoryCacheRepository() *InMemoryCacheRepository {
-	return &InMemoryCacheRepository{cache: make(map[string]model.CacheItem)}
-}
-
-func (repo *InMemoryCacheRepository) Set(key string, value interface{}, duration time.Duration) error {
-	repo.mu.Lock()
-	defer repo.mu.Unlock()
-
-	expiration := time.Now().Add(duration).UnixNano()
-	repo.cache[key] = model.CacheItem{
-		Key:        key,
-		Value:      value,
-		Expiration: expiration,
+func NewMapDataRepository() *MapDataRepository {
+	return &MapDataRepository{
+		dataMap: make(map[string]string),
 	}
+}
+
+func (r *MapDataRepository) Set(key, value string) error {
+	r.dataMap[key] = value
 	return nil
 }
 
-func (repo *InMemoryCacheRepository) Get(key string) (interface{}, error) {
-	repo.mu.RLock()
-	defer repo.mu.RUnlock()
-
-	item, found := repo.cache[key]
-	if !found || item.Expiration < time.Now().UnixNano() {
-		return nil, nil
+func (r *MapDataRepository) Get(key string) (string, error) {
+	value, ok := r.dataMap[key]
+	if !ok {
+		return "", nil
 	}
-	return item.Value, nil
-}
-
-func (repo *InMemoryCacheRepository) Delete(key string) error {
-	repo.mu.Lock()
-	defer repo.mu.Unlock()
-
-	delete(repo.cache, key)
-	return nil
+	return value, nil
 }

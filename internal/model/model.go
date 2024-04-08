@@ -2,15 +2,18 @@ package model
 
 import (
 	"sync"
+
+	"github.com/hashicorp/memberlist"
 )
 
-type CacheItem struct {
-	Key        string
-	Value      interface{}
-	Expiration int64
+type Data struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
-type Cache struct {
-	Items map[string]CacheItem
-	Mu    sync.RWMutex
+type Server struct {
+	DataMap      map[string]string
+	PeerList     []*memberlist.Node
+	Memberlist   *memberlist.Memberlist
+	PeerUpdateMu sync.Mutex
 }

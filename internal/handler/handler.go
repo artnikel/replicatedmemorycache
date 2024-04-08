@@ -3,61 +3,53 @@ package handler
 import (
 	"fmt"
 	"net/http"
-	"strconv"
-	"time"
 )
 
-type CacheService interface {
-	Set(key string, value interface{}, duration time.Duration) error
-	Get(key string) (interface{}, error)
-	Delete(key string) error
+type DataService interface {
+	Set(key, value string) error
+	Get(key string) (string, error)
 }
 
-type CacheHandler struct {
-	service CacheService
+type DataHandler struct {
+	service DataService
 }
 
-func NewCacheHandler(service CacheService) *CacheHandler {
-	return &CacheHandler{service: service}
+func NewDataHandler(service DataService) *DataHandler {
+	return &DataHandler{
+		service: service,
+	}
 }
 
-func (h *CacheHandler) HandleGetCache(w http.ResponseWriter, r *http.Request) {
-	key := r.URL.Path[len("/cache/"):]
-	value, err := h.service.Get(key)
+func (h *DataHandler) Set(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	key := r.URL.Query().Get("key")
+	value := r.URL.Query().Get("value")
+
+	if err := h.service.Set(key, value); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "Data added successfully")
+}
+
+func (h *DataHandler) Get(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	key := r.URL.Query().Get("key")
+
+	data, err := h.service.Get(key)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	if value == nil {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-	fmt.Fprintf(w, "%v", value)
-}
 
-func (h *CacheHandler) HandleSetCache(w http.ResponseWriter, r *http.Request) {
-	key := r.URL.Path[len("/cache/"):]
-	value := r.FormValue("value")
-	durationStr := r.FormValue("duration")
-	duration, err := strconv.ParseInt(durationStr, 10, 64)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	err = h.service.Set(key, value, time.Duration(duration))
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-}
-
-func (h *CacheHandler) HandleDeleteCache(w http.ResponseWriter, r *http.Request) {
-	key := r.URL.Path[len("/cache/"):]
-	err := h.service.Delete(key)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Value for key %s: %s", key, data)
 }

@@ -1,75 +1,51 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
+	"os/signal"
+	"time"
 
 	"github.com/artnikel/replicatedmemorycache/internal/handler"
-	"github.com/artnikel/replicatedmemorycache/internal/model"
 	"github.com/artnikel/replicatedmemorycache/internal/repository"
 	"github.com/artnikel/replicatedmemorycache/internal/service"
 	"github.com/hashicorp/memberlist"
 )
 
-type DistributedCache struct {
-	cache  *model.Cache
-	list   *memberlist.Memberlist
-	config *memberlist.Config
-}
-
-func (dc *DistributedCache) joinCluster(peer string) error {
-    _, err := dc.list.Join([]string{peer})
-    return err
-}
-
-func NewCache() *model.Cache {
-    return &model.Cache{
-        Items: make(map[string]model.CacheItem),
-    }
-}
-
-func newDistributedCache(port int) (*DistributedCache, error) {
-	cache := NewCache()
-	config := memberlist.DefaultLANConfig()
-	config.BindPort = port
-	config.AdvertisePort = port
-	list, err := memberlist.Create(config)
-	if err != nil {
-		return nil, err
-	}
-	dc := &DistributedCache{
-		cache:  cache,
-		list:   list,
-		config: config,
-	}
-	return dc, nil
-}
-
 func main() {
-	port, _ := strconv.Atoi(os.Getenv("PORT"))
-	peer := os.Getenv("PEER")
+	repository := repository.NewMapDataRepository()
+	peerList := []*memberlist.Node{} 
+	replicationService := service.NewDataReplicationService(peerList)
+	service := service.NewMapDataService(repository,*replicationService)
+	handler := handler.NewDataHandler(service)
 
-	cacheRepo := repository.NewInMemoryCacheRepository()
-	cacheService := service.NewCacheService(cacheRepo)
-	cacheHandler := handler.NewCacheHandler(cacheService)
+	http.HandleFunc("/set", handler.Set)
+	http.HandleFunc("/get", handler.Get)
 
-	http.HandleFunc("/cache/", cacheHandler.HandleGetCache)
-	http.HandleFunc("/cache/set", cacheHandler.HandleSetCache)
-	http.HandleFunc("/cache/delete", cacheHandler.HandleDeleteCache)
+	log.Println("Server started on :8080")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	dc, err := newDistributedCache(port)
-    if err != nil {
-        log.Fatalf("Failed to create distributed cache: %v", err)
-    }
-    if peer != "" {
-        err = dc.joinCluster(peer)
-        if err != nil {
-            log.Fatalf("Failed to join cluster: %v", err)
-        }
-    }
+	go func() {
+		if err := http.ListenAndServe(":8080", nil); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+	<-sig
+
+	cancel()
+	log.Println("Shutting down server...")
+
+	select {
+	case <-time.After(5 * time.Second):
+		log.Println("Server shutdown timeout, force exiting.")
+		os.Exit(1)
+	case <-ctx.Done():
+		log.Println("Server stopped gracefully.")
+	}
 }

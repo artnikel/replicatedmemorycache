@@ -1,33 +1,34 @@
 package service
 
-import "time"
+type DataRepository interface {
+	Set(key, value string) error
+	Get(key string) (string, error)
 
-type CacheRepository interface {
-	Set(key string, value interface{}, duration time.Duration) error
-	Get(key string) (interface{}, error)
-	Delete(key string) error
 }
 
-// CacheService определяет бизнес-логику для работы с кэшем.
-type CacheService struct {
-	repo CacheRepository
+type MapDataService struct {
+	repository         DataRepository
+	replicationService DataReplicationService
 }
 
-func NewCacheService(repo CacheRepository) *CacheService {
-	return &CacheService{repo: repo}
+func NewMapDataService(repository DataRepository, replicationService DataReplicationService) *MapDataService {
+	return &MapDataService{
+		repository:         repository,
+		replicationService: replicationService,
+	}
 }
 
-// Set добавляет или обновляет элемент в кэше.
-func (s *CacheService) Set(key string, value interface{}, duration time.Duration) error {
-	return s.repo.Set(key, value, duration)
+func (s *MapDataService) Set(key, value string) error {
+	if err := s.repository.Set(key, value); err != nil {
+		return err
+	}
+
+	if err := s.replicationService.ReplicateData(key, value); err != nil {
+		return err
+	}
+	return nil
 }
 
-// Get получает значение элемента из кэша по ключу.
-func (s *CacheService) Get(key string) (interface{}, error) {
-	return s.repo.Get(key)
-}
-
-// Delete удаляет элемент из кэша по ключу.
-func (s *CacheService) Delete(key string) error {
-	return s.repo.Delete(key)
+func (s *MapDataService) Get(key string) (string, error) {
+	return s.repository.Get(key)
 }
