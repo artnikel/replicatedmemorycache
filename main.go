@@ -11,26 +11,30 @@ import (
 	"github.com/artnikel/replicatedmemorycache/internal/handler"
 	"github.com/artnikel/replicatedmemorycache/internal/repository"
 	"github.com/artnikel/replicatedmemorycache/internal/service"
-	"github.com/hashicorp/memberlist"
 )
 
 func main() {
-	repository := repository.NewMapDataRepository()
-	peerList := []*memberlist.Node{} 
-	replicationService := service.NewDataReplicationService(peerList)
-	service := service.NewMapDataService(repository,*replicationService)
+	args := os.Args
+	if len(args) < 2 {
+		log.Fatal("Enter the port at the end")
+	}
+	port := args[1]
+	peers := []string{"http://localhost:8081", "http://localhost:8082"}
+	repository := repository.NewKeyValueStore()
+	service := service.NewMapDataService(repository, peers)
 	handler := handler.NewDataHandler(service)
 
 	http.HandleFunc("/set", handler.Set)
 	http.HandleFunc("/get", handler.Get)
+	http.HandleFunc("/delete", handler.Delete)
 
-	log.Println("Server started on :8080")
+	log.Printf("Server started on %s", port)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	go func() {
-		if err := http.ListenAndServe(":8080", nil); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+		if err := http.ListenAndServe(":"+port, nil); err != nil {
+			log.Fatalf("failed to start server: %v", err)
 		}
 	}()
 

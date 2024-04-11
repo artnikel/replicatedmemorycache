@@ -1,24 +1,37 @@
 package repository
 
-type MapDataRepository struct {
-	dataMap map[string]string
+import (
+	"fmt"
+	"sync"
+)
+
+
+type KeyValueStore struct {
+	dataMap sync.Map
 }
 
-func NewMapDataRepository() *MapDataRepository {
-	return &MapDataRepository{
-		dataMap: make(map[string]string),
+func NewKeyValueStore() *KeyValueStore {
+	return &KeyValueStore{
+		dataMap: sync.Map{},
 	}
 }
 
-func (r *MapDataRepository) Set(key, value string) error {
-	r.dataMap[key] = value
+func (r *KeyValueStore) Set(key, value string) error {
+	r.dataMap.Store(key, value)
 	return nil
 }
 
-func (r *MapDataRepository) Get(key string) (string, error) {
-	value, ok := r.dataMap[key]
-	if !ok {
-		return "", nil
+func (r *KeyValueStore) Get(key string) (string, error) {
+	if value, ok := r.dataMap.Load(key); ok {
+		return value.(string), nil
 	}
-	return value, nil
+	return "", fmt.Errorf("key no found")
+}
+
+func (r *KeyValueStore) Delete(key string) error {
+	if _, ok := r.dataMap.Load(key); !ok {
+		return fmt.Errorf("key no found")
+	}
+	r.dataMap.Delete(key)
+	return nil
 }

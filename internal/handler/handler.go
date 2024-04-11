@@ -8,6 +8,7 @@ import (
 type DataService interface {
 	Set(key, value string) error
 	Get(key string) (string, error)
+	Delete(key string) error
 }
 
 type DataHandler struct {
@@ -52,4 +53,21 @@ func (h *DataHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "Value for key %s: %s", key, data)
+}
+
+
+func (h *DataHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	key := r.URL.Query().Get("key")
+
+	if err := h.service.Delete(key); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "Data deleted successfully")
 }
