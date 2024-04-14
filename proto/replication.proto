@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+option go_package = "github.com/artnikel/replicatedmemorycache/proto";
+
+service CacheService {
+    rpc SetData(SetDataRequest) returns (SetDataResponse) {}
+    rpc GetData(GetDataRequest) returns (GetDataResponse) {}
+    rpc SyncData(SyncDataRequest) returns (SyncDataResponse) {}
+}
+
+message SetDataRequest {
+    string key = 1;
+    string value = 2;
+}
+
+message SetDataResponse {
+    bool success = 1;
+}
+
+message GetDataRequest {
+    string key = 1;
+}
+
+message GetDataResponse {
+    string value = 1;
+}
+
+message SyncDataRequest {
+    map<string, string> data = 1;
+}
+
+message SyncDataResponse {
+    bool success = 1;
+}
+
+
+

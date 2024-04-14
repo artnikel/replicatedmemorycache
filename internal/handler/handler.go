@@ -1,73 +1,32 @@
 package handler
 
 import (
-	"fmt"
-	"net/http"
+	"context"
+
+	"github.com/artnikel/replicatedmemorycache/internal/service"
+	pb "github.com/artnikel/replicatedmemorycache/proto"
 )
 
-type DataService interface {
-	Set(key, value string) error
-	Get(key string) (string, error)
-	Delete(key string) error
+type CacheHandler struct {
+    service *service.CacheService
+	pb.UnimplementedCacheServiceServer
 }
 
-type DataHandler struct {
-	service DataService
+func NewCacheHandler(service *service.CacheService) *CacheHandler {
+    return &CacheHandler{service: service}
 }
 
-func NewDataHandler(service DataService) *DataHandler {
-	return &DataHandler{
-		service: service,
-	}
+func (h *CacheHandler) SetData(ctx context.Context, req *pb.SetDataRequest) (*pb.SetDataResponse, error) {
+    h.service.SetData(req.Key, req.Value)
+    return &pb.SetDataResponse{Success: true}, nil
 }
 
-func (h *DataHandler) Set(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	key := r.URL.Query().Get("key")
-	value := r.URL.Query().Get("value")
-
-	if err := h.service.Set(key, value); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	fmt.Fprintf(w, "Data added successfully")
+func (h *CacheHandler) GetData(ctx context.Context, req *pb.GetDataRequest) (*pb.GetDataResponse, error) {
+    value := h.service.GetData(req.Key)
+    return &pb.GetDataResponse{Value: value}, nil
 }
 
-func (h *DataHandler) Get(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	key := r.URL.Query().Get("key")
-
-	data, err := h.service.Get(key)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	fmt.Fprintf(w, "Value for key %s: %s", key, data)
-}
-
-
-func (h *DataHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	key := r.URL.Query().Get("key")
-
-	if err := h.service.Delete(key); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	fmt.Fprintf(w, "Data deleted successfully")
+func (h *CacheHandler) SyncData(ctx context.Context, req *pb.SyncDataRequest) (*pb.SyncDataResponse, error) {
+    h.service.SyncData(req.Data)
+    return &pb.SyncDataResponse{Success: true}, nil
 }

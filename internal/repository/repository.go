@@ -1,37 +1,34 @@
 package repository
 
 import (
-	"fmt"
-	"sync"
+    "sync"
 )
 
-
-type KeyValueStore struct {
-	dataMap sync.Map
+type CacheRepository struct {
+    data map[string]string
+    mu   sync.RWMutex
 }
 
-func NewKeyValueStore() *KeyValueStore {
-	return &KeyValueStore{
-		dataMap: sync.Map{},
-	}
+func NewCacheRepository() *CacheRepository {
+    return &CacheRepository{data: make(map[string]string)}
 }
 
-func (r *KeyValueStore) Set(key, value string) error {
-	r.dataMap.Store(key, value)
-	return nil
+func (r *CacheRepository) Set(key, value string) {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+    r.data[key] = value
 }
 
-func (r *KeyValueStore) Get(key string) (string, error) {
-	if value, ok := r.dataMap.Load(key); ok {
-		return value.(string), nil
-	}
-	return "", fmt.Errorf("key no found")
+func (r *CacheRepository) Get(key string) string {
+    r.mu.RLock()
+    defer r.mu.RUnlock()
+    return r.data[key]
 }
 
-func (r *KeyValueStore) Delete(key string) error {
-	if _, ok := r.dataMap.Load(key); !ok {
-		return fmt.Errorf("key no found")
-	}
-	r.dataMap.Delete(key)
-	return nil
+func (r *CacheRepository) Sync(data map[string]string) {
+    r.mu.Lock()
+    defer r.mu.Unlock()
+    for key, value := range data {
+        r.data[key] = value
+    }
 }
