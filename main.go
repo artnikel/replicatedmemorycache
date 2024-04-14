@@ -1,55 +1,29 @@
 package main
 
 import (
-	"context"
 	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"time"
+	"net"
 
 	"github.com/artnikel/replicatedmemorycache/internal/handler"
 	"github.com/artnikel/replicatedmemorycache/internal/repository"
 	"github.com/artnikel/replicatedmemorycache/internal/service"
+	"github.com/artnikel/replicatedmemorycache/proto"
+	"google.golang.org/grpc"
 )
 
 func main() {
-	args := os.Args
-	if len(args) < 2 {
-		log.Fatal("Enter the port at the end")
+	repo := repository.NewCacheRepository()
+	service := service.NewCacheService(repo)
+    handler := handler.NewCacheHandler(service)
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
 	}
-	port := args[1]
-	peers := []string{"http://localhost:8081", "http://localhost:8082"}
-	repository := repository.NewKeyValueStore()
-	service := service.NewMapDataService(repository, peers)
-	handler := handler.NewDataHandler(service)
+	s := grpc.NewServer()
+	proto.RegisterCacheServiceServer(s, handler)
 
-	http.HandleFunc("/set", handler.Set)
-	http.HandleFunc("/get", handler.Get)
-	http.HandleFunc("/delete", handler.Delete)
-
-	log.Printf("Server started on %s", port)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	go func() {
-		if err := http.ListenAndServe(":"+port, nil); err != nil {
-			log.Fatalf("failed to start server: %v", err)
-		}
-	}()
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
-	<-sig
-
-	cancel()
-	log.Println("Shutting down server...")
-
-	select {
-	case <-time.After(5 * time.Second):
-		log.Println("Server shutdown timeout, force exiting.")
-		os.Exit(1)
-	case <-ctx.Done():
-		log.Println("Server stopped gracefully.")
+	log.Println("Cache server listening on port 50051...")
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
 	}
 }
